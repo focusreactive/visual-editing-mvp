@@ -64,7 +64,7 @@ describe('EditableField', () => {
     const link = screen.getByRole('link')
     expect(link.textContent).toContain('Rich Text')
     expect(link.getAttribute('href')).toBe(
-      'http://localhost:3000/admin/collections/pages/page1#field-layout.2.richText',
+      'http://localhost:3000/admin/collections/pages/page1?focusPath=layout.2.richText',
     )
     expect(link.getAttribute('target')).toBe('_blank')
   })

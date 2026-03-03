@@ -7,6 +7,7 @@ import { CallToActionBlock } from '@/blocks/CallToAction/Component'
 import { ContentBlock } from '@/blocks/Content/Component'
 import { FormBlock } from '@/blocks/Form/Component'
 import { MediaBlock } from '@/blocks/MediaBlock/Component'
+import { EditableBlock } from '@/components/EditableBlock'
 
 const blockComponents = {
   archive: ArchiveBlock,
@@ -34,10 +35,10 @@ export const RenderBlocks: React.FC<{
 
             if (Block) {
               return (
-                <div className="my-16" key={index}>
+                <EditableBlock key={index} blockIndex={index} blockType={blockType} className="my-16">
                   {/* @ts-expect-error there may be some mismatch between the expected types here */}
                   <Block {...block} blockIndex={index} disableInnerContainer />
-                </div>
+                </EditableBlock>
               )
             }
           }

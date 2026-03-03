@@ -53,6 +53,11 @@ export const Pages: CollectionConfig<'pages'> = {
         req,
       }),
     useAsTitle: 'title',
+    components: {
+      edit: {
+        beforeDocumentControls: ['@/components/VisualEditingFocuser'],
+      },
+    },
   },
   fields: [
     {
