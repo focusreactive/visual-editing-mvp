@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { getClientSideURL } from '@/utilities/getURL'
 
 type VisualEditingContextValue = {
@@ -24,23 +24,27 @@ export const VisualEditingProvider: React.FC<Props> = ({ docId, collectionSlug, 
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    fetch(`${getClientSideURL()}/api/users/me`, { credentials: 'include' })
+    const controller = new AbortController()
+    fetch(`${getClientSideURL()}/api/users/me`, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data?.user?.id) setIsAdmin(true)
       })
       .catch(() => {})
+    return () => controller.abort()
   }, [])
 
+  const adminBaseUrl = useMemo(() => `${getClientSideURL()}/admin`, [])
+  const value = useMemo(
+    () => ({ isAdmin, docId, collectionSlug, adminBaseUrl }),
+    [isAdmin, docId, collectionSlug, adminBaseUrl],
+  )
+
   return (
-    <VisualEditingContext.Provider
-      value={{
-        isAdmin,
-        docId,
-        collectionSlug,
-        adminBaseUrl: `${getClientSideURL()}/admin`,
-      }}
-    >
+    <VisualEditingContext.Provider value={value}>
       {children}
     </VisualEditingContext.Provider>
   )
