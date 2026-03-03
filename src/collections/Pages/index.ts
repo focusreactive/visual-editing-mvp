@@ -53,11 +53,6 @@ export const Pages: CollectionConfig<'pages'> = {
         req,
       }),
     useAsTitle: 'title',
-    components: {
-      edit: {
-        beforeDocumentControls: ['@/components/VisualEditingFocuser'],
-      },
-    },
   },
   fields: [
     {
@@ -80,7 +75,7 @@ export const Pages: CollectionConfig<'pages'> = {
               blocks: [CallToAction, Content, MediaBlock, Archive, FormBlock],
               required: true,
               admin: {
-                initCollapsed: true,
+                initCollapsed: false,
               },
             },
           ],

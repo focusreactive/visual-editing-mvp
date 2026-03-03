@@ -20,7 +20,7 @@ export const EditableBlock: React.FC<Props> = ({ blockIndex, blockType, children
   }
 
   const { adminBaseUrl, collectionSlug, docId } = ctx
-  const href = `${adminBaseUrl}/collections/${collectionSlug}/${docId}?focusPath=layout.${blockIndex}`
+  const href = `${adminBaseUrl}/collections/${collectionSlug}/${docId}#layout-row-${blockIndex}`
 
   return (
     <div

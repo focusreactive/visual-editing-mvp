@@ -25,7 +25,7 @@ export const EditableField: React.FC<Props> = ({
   if (!ctx?.isAdmin) return <>{children}</>
 
   const { adminBaseUrl, collectionSlug, docId } = ctx
-  const href = `${adminBaseUrl}/collections/${collectionSlug}/${docId}?focusPath=layout.${blockIndex}.${field}`
+  const href = `${adminBaseUrl}/collections/${collectionSlug}/${docId}#field-layout__${blockIndex}__${field}`
 
   return (
     <div
