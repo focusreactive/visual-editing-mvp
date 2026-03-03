@@ -24,7 +24,7 @@ describe('EditableField', () => {
       </EditableField>,
     )
     expect(screen.getByText('content')).toBeTruthy()
-    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('renders children as-is when isAdmin is false', () => {
@@ -36,7 +36,7 @@ describe('EditableField', () => {
       </VisualEditingContext.Provider>,
     )
     expect(screen.getByText('content')).toBeTruthy()
-    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('shows no badge before hover when isAdmin is true', () => {
@@ -47,10 +47,12 @@ describe('EditableField', () => {
         </EditableField>
       </VisualEditingContext.Provider>,
     )
-    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('shows edit badge with correct href on hover', () => {
+  it('shows edit badge as button on hover and opens admin on click', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
     const { container } = render(
       <VisualEditingContext.Provider value={adminCtx}>
         <EditableField field="richText" label="Rich Text" blockIndex={2}>
@@ -61,12 +63,16 @@ describe('EditableField', () => {
 
     fireEvent.mouseEnter(container.firstChild as Element)
 
-    const link = screen.getByRole('link')
-    expect(link.textContent).toContain('Rich Text')
-    expect(link.getAttribute('href')).toBe(
-      'http://localhost:3000/admin/collections/pages/page1#field-layout__2__richText',
+    const button = screen.getByRole('button')
+    expect(button.textContent).toContain('Rich Text')
+
+    fireEvent.click(button)
+    expect(openSpy).toHaveBeenCalledWith(
+      'http://localhost:3000/admin/collections/pages/page1',
+      '_blank',
     )
-    expect(link.getAttribute('target')).toBe('_blank')
+
+    openSpy.mockRestore()
   })
 
   it('hides badge on mouse leave', () => {
@@ -79,10 +85,10 @@ describe('EditableField', () => {
     )
 
     fireEvent.mouseEnter(container.firstChild as Element)
-    expect(screen.getByRole('link')).toBeTruthy()
+    expect(screen.getByRole('button')).toBeTruthy()
 
     fireEvent.mouseLeave(container.firstChild as Element)
-    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('defaults label to field name when label prop is omitted', () => {
@@ -95,6 +101,6 @@ describe('EditableField', () => {
     )
 
     fireEvent.mouseEnter(container.firstChild as Element)
-    expect(screen.getByRole('link').textContent).toContain('links')
+    expect(screen.getByRole('button').textContent).toContain('links')
   })
 })

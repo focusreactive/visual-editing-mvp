@@ -25,7 +25,16 @@ export const EditableField: React.FC<Props> = ({
   if (!ctx?.isAdmin) return <>{children}</>
 
   const { adminBaseUrl, collectionSlug, docId } = ctx
-  const href = `${adminBaseUrl}/collections/${collectionSlug}/${docId}#field-layout__${blockIndex}__${field}`
+  const fieldPath = `layout.${blockIndex}.${field}`
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 've:open-field', fieldPath, docId, collectionSlug }, '*')
+    } else {
+      window.open(`${adminBaseUrl}/collections/${collectionSlug}/${docId}`, '_blank')
+    }
+  }
 
   return (
     <div
@@ -34,15 +43,12 @@ export const EditableField: React.FC<Props> = ({
       onMouseLeave={() => setHovered(false)}
     >
       {hovered && (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute top-1 right-1 z-50 flex items-center gap-1 rounded bg-blue-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-600"
-          onClick={(e) => e.stopPropagation()}
+        <button
+          className="absolute top-1 right-1 z-50 flex items-center gap-1 rounded bg-blue-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-600 cursor-pointer border-0"
+          onClick={handleClick}
         >
           ✏ {label ?? field}
-        </a>
+        </button>
       )}
       <div
         className={cn(

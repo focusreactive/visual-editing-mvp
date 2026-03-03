@@ -38,6 +38,11 @@ export const Pages: CollectionConfig<'pages'> = {
   },
   admin: {
     defaultColumns: ['title', 'slug', 'updatedAt'],
+    components: {
+      edit: {
+        beforeDocumentControls: ['@/components/VisualEditingBridge'],
+      },
+    },
     livePreview: {
       url: ({ data, req }) =>
         generatePreviewPath({
