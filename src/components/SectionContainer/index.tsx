@@ -21,9 +21,10 @@ export const SectionContainer: React.FC<Props> = ({ basePath, blockType, childre
     if (!ctx) return
     const { adminBaseUrl, collectionSlug, docId } = ctx
     if (window.parent !== window) {
+      const targetOrigin = new URL(adminBaseUrl).origin
       window.parent.postMessage(
         { type: 've:open-field', fieldPath: basePath, docId, collectionSlug },
-        '*',
+        targetOrigin,
       )
     } else {
       window.open(`${adminBaseUrl}/collections/${collectionSlug}/${docId}`, '_blank')
@@ -34,6 +35,7 @@ export const SectionContainer: React.FC<Props> = ({ basePath, blockType, childre
     <SectionContext.Provider value={{ basePath }}>
       {ctx?.isAdmin ? (
         <div
+          data-testid="section-wrapper"
           className={cn(
             'relative rounded transition-all duration-150',
             hovered && 'ring-2 ring-purple-400 ring-offset-4',

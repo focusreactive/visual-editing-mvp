@@ -47,7 +47,7 @@ describe('SectionContainer', () => {
   })
 
   it('shows block edit badge on hover when admin', () => {
-    const { container } = render(
+    render(
       <VisualEditingContext.Provider value={adminCtx}>
         <SectionContainer basePath="layout.0" blockType="cta">
           <span>child</span>
@@ -55,8 +55,49 @@ describe('SectionContainer', () => {
       </VisualEditingContext.Provider>,
     )
     expect(screen.queryByRole('button')).toBeNull()
-    fireEvent.mouseEnter(container.firstChild as Element)
+    fireEvent.mouseEnter(screen.getByTestId('section-wrapper'))
     const btn = screen.getByRole('button')
     expect(btn.textContent).toContain('cta')
+  })
+
+  it('renders children without overlay when context is absent', () => {
+    render(
+      <SectionContainer basePath="layout.0" blockType="cta">
+        <span>child</span>
+      </SectionContainer>,
+    )
+    expect(screen.getByText('child')).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('click sends postMessage with correct payload', () => {
+    const postMessageSpy = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => {})
+
+    // Make window.parent !== window so the postMessage branch is taken
+    Object.defineProperty(window, 'parent', {
+      value: { postMessage: postMessageSpy },
+      configurable: true,
+    })
+
+    render(
+      <VisualEditingContext.Provider value={adminCtx}>
+        <SectionContainer basePath="layout.0" blockType="cta">
+          <span>child</span>
+        </SectionContainer>
+      </VisualEditingContext.Provider>,
+    )
+
+    fireEvent.mouseEnter(screen.getByTestId('section-wrapper'))
+    const btn = screen.getByRole('button')
+    fireEvent.click(btn)
+
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      { type: 've:open-field', fieldPath: 'layout.0', docId: 'page1', collectionSlug: 'pages' },
+      'http://localhost:3000',
+    )
+
+    postMessageSpy.mockRestore()
+    // Restore window.parent to window itself
+    Object.defineProperty(window, 'parent', { value: window, configurable: true })
   })
 })
