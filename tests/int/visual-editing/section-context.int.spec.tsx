@@ -22,4 +22,24 @@ describe('SectionContext', () => {
     )
     expect(screen.getByTestId('val').textContent).toBe('layout.2')
   })
+
+  it('provides empty basePath to consumers', () => {
+    render(
+      <SectionContext.Provider value={{ basePath: '' }}>
+        <Consumer />
+      </SectionContext.Provider>,
+    )
+    expect(screen.getByTestId('val').textContent).toBe('')
+  })
+
+  it('inner provider overrides outer', () => {
+    render(
+      <SectionContext.Provider value={{ basePath: 'outer' }}>
+        <SectionContext.Provider value={{ basePath: 'inner' }}>
+          <Consumer />
+        </SectionContext.Provider>
+      </SectionContext.Provider>,
+    )
+    expect(screen.getByTestId('val').textContent).toBe('inner')
+  })
 })
