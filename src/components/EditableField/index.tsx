@@ -25,7 +25,8 @@ export const EditableField: React.FC<Props> = ({ field, label, children, classNa
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (window.parent !== window) {
-      window.parent.postMessage({ type: 've:open-field', fieldPath, docId, collectionSlug }, '*')
+      const targetOrigin = new URL(adminBaseUrl).origin
+      window.parent.postMessage({ type: 've:open-field', fieldPath, docId, collectionSlug }, targetOrigin)
     } else {
       window.open(`${adminBaseUrl}/collections/${collectionSlug}/${docId}`, '_blank')
     }

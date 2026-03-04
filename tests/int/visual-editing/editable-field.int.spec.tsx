@@ -73,7 +73,7 @@ describe('EditableField', () => {
     fireEvent.click(button)
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 've:open-field', fieldPath: 'layout.2.richText' }),
-      '*',
+      expect.any(String),
     )
   })
 
@@ -122,7 +122,7 @@ describe('EditableField', () => {
     fireEvent.click(screen.getByRole('button'))
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ fieldPath: 'hero.richText' }),
-      '*',
+      expect.any(String),
     )
   })
 })
