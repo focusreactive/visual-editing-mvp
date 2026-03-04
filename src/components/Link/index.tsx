@@ -1,9 +1,14 @@
+'use client'
+
 import { Button, type ButtonProps } from '@/components/ui/button'
 import { cn } from '@/utilities/ui'
 import Link from 'next/link'
 import React from 'react'
 
 import type { Page, Post } from '@/payload-types'
+import { EditableField } from '@/components/EditableField'
+import { useVisualEditing } from '@/providers/VisualEditing'
+import { useSectionContext } from '@/providers/SectionContext'
 
 type CMSLinkType = {
   appearance?: 'inline' | ButtonProps['variant']
@@ -33,6 +38,9 @@ export const CMSLink: React.FC<CMSLinkType> = (props) => {
     url,
   } = props
 
+  const ve = useVisualEditing()
+  const section = useSectionContext()
+
   const href =
     type === 'reference' && typeof reference?.value === 'object' && reference.value.slug
       ? `${reference?.relationTo !== 'pages' ? `/${reference?.relationTo}` : ''}/${
@@ -45,22 +53,29 @@ export const CMSLink: React.FC<CMSLinkType> = (props) => {
   const size = appearance === 'link' ? 'clear' : sizeFromProps
   const newTabProps = newTab ? { rel: 'noopener noreferrer', target: '_blank' } : {}
 
-  /* Ensure we don't break any styles set by richText */
-  if (appearance === 'inline') {
-    return (
+  const linkElement =
+    /* Ensure we don't break any styles set by richText */
+    appearance === 'inline' ? (
       <Link className={cn(className)} href={href || url || ''} {...newTabProps}>
         {label && label}
         {children && children}
       </Link>
+    ) : (
+      <Button asChild className={className} size={size} variant={appearance}>
+        <Link className={cn(className)} href={href || url || ''} {...newTabProps}>
+          {label && label}
+          {children && children}
+        </Link>
+      </Button>
+    )
+
+  if (ve?.isAdmin && section?.basePath) {
+    return (
+      <EditableField field="link">
+        {linkElement}
+      </EditableField>
     )
   }
 
-  return (
-    <Button asChild className={className} size={size} variant={appearance}>
-      <Link className={cn(className)} href={href || url || ''} {...newTabProps}>
-        {label && label}
-        {children && children}
-      </Link>
-    </Button>
-  )
+  return linkElement
 }
