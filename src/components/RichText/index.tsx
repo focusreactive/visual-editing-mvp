@@ -1,3 +1,5 @@
+'use client'
+
 import { MediaBlock } from '@/blocks/MediaBlock/Component'
 import {
   DefaultNodeTypes,
@@ -21,6 +23,9 @@ import type {
 import { BannerBlock } from '@/blocks/Banner/Component'
 import { CallToActionBlock } from '@/blocks/CallToAction/Component'
 import { cn } from '@/utilities/ui'
+import { useVisualEditing } from '@/providers/VisualEditing'
+import { useSectionContext } from '@/providers/SectionContext'
+import { EditableField } from '@/components/EditableField'
 
 type NodeTypes =
   | DefaultNodeTypes
@@ -63,7 +68,10 @@ type Props = {
 
 export default function RichText(props: Props) {
   const { className, enableProse = true, enableGutter = true, ...rest } = props
-  return (
+  const ve = useVisualEditing()
+  const section = useSectionContext()
+
+  const content = (
     <ConvertRichText
       converters={jsxConverters}
       className={cn(
@@ -78,4 +86,14 @@ export default function RichText(props: Props) {
       {...rest}
     />
   )
+
+  if (section?.basePath && ve?.isAdmin) {
+    return (
+      <EditableField field="richText">
+        {content}
+      </EditableField>
+    )
+  }
+
+  return content
 }
