@@ -3,29 +3,24 @@
 import React, { useState } from 'react'
 import { cn } from '@/utilities/ui'
 import { useVisualEditing } from '@/providers/VisualEditing'
+import { useSectionContext } from '@/providers/SectionContext'
 
 type Props = {
   field: string
   label?: string
-  blockIndex: number
   children: React.ReactNode
   className?: string
 }
 
-export const EditableField: React.FC<Props> = ({
-  field,
-  label,
-  blockIndex,
-  children,
-  className,
-}) => {
+export const EditableField: React.FC<Props> = ({ field, label, children, className }) => {
   const ctx = useVisualEditing()
+  const section = useSectionContext()
   const [hovered, setHovered] = useState(false)
 
   if (!ctx?.isAdmin) return <>{children}</>
 
   const { adminBaseUrl, collectionSlug, docId } = ctx
-  const fieldPath = `layout.${blockIndex}.${field}`
+  const fieldPath = section?.basePath ? `${section.basePath}.${field}` : field
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()

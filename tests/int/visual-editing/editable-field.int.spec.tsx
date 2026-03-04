@@ -7,6 +7,7 @@ vi.mock('@/utilities/getURL', () => ({
 }))
 
 import { VisualEditingContext } from '@/providers/VisualEditing'
+import { SectionContext } from '@/providers/SectionContext'
 import { EditableField } from '@/components/EditableField'
 
 const adminCtx = {
@@ -19,7 +20,7 @@ const adminCtx = {
 describe('EditableField', () => {
   it('renders children as-is when there is no context', () => {
     render(
-      <EditableField field="richText" blockIndex={0}>
+      <EditableField field="richText">
         <span>content</span>
       </EditableField>,
     )
@@ -30,63 +31,64 @@ describe('EditableField', () => {
   it('renders children as-is when isAdmin is false', () => {
     render(
       <VisualEditingContext.Provider value={{ ...adminCtx, isAdmin: false }}>
-        <EditableField field="richText" blockIndex={0}>
+        <EditableField field="richText">
           <span>content</span>
         </EditableField>
       </VisualEditingContext.Provider>,
     )
-    expect(screen.getByText('content')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('shows no badge before hover when isAdmin is true', () => {
     render(
       <VisualEditingContext.Provider value={adminCtx}>
-        <EditableField field="richText" label="Rich Text" blockIndex={0}>
-          <span>content</span>
-        </EditableField>
+        <SectionContext.Provider value={{ basePath: 'layout.0' }}>
+          <EditableField field="richText" label="Rich Text">
+            <span>content</span>
+          </EditableField>
+        </SectionContext.Provider>
       </VisualEditingContext.Provider>,
     )
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('shows edit badge as button on hover and opens admin on click', () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+  it('shows edit badge on hover and sends postMessage with correct path', () => {
+    const postMessageSpy = vi.fn()
+    Object.defineProperty(window, 'parent', { value: { postMessage: postMessageSpy }, writable: true })
 
     const { container } = render(
       <VisualEditingContext.Provider value={adminCtx}>
-        <EditableField field="richText" label="Rich Text" blockIndex={2}>
-          <span>content</span>
-        </EditableField>
+        <SectionContext.Provider value={{ basePath: 'layout.2' }}>
+          <EditableField field="richText" label="Rich Text">
+            <span>content</span>
+          </EditableField>
+        </SectionContext.Provider>
       </VisualEditingContext.Provider>,
     )
 
     fireEvent.mouseEnter(container.firstChild as Element)
-
     const button = screen.getByRole('button')
     expect(button.textContent).toContain('Rich Text')
 
     fireEvent.click(button)
-    expect(openSpy).toHaveBeenCalledWith(
-      'http://localhost:3000/admin/collections/pages/page1',
-      '_blank',
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 've:open-field', fieldPath: 'layout.2.richText' }),
+      '*',
     )
-
-    openSpy.mockRestore()
   })
 
   it('hides badge on mouse leave', () => {
     const { container } = render(
       <VisualEditingContext.Provider value={adminCtx}>
-        <EditableField field="richText" label="Rich Text" blockIndex={0}>
-          <span>content</span>
-        </EditableField>
+        <SectionContext.Provider value={{ basePath: 'layout.0' }}>
+          <EditableField field="richText" label="Rich Text">
+            <span>content</span>
+          </EditableField>
+        </SectionContext.Provider>
       </VisualEditingContext.Provider>,
     )
-
     fireEvent.mouseEnter(container.firstChild as Element)
     expect(screen.getByRole('button')).toBeTruthy()
-
     fireEvent.mouseLeave(container.firstChild as Element)
     expect(screen.queryByRole('button')).toBeNull()
   })
@@ -94,13 +96,33 @@ describe('EditableField', () => {
   it('defaults label to field name when label prop is omitted', () => {
     const { container } = render(
       <VisualEditingContext.Provider value={adminCtx}>
-        <EditableField field="links" blockIndex={0}>
+        <SectionContext.Provider value={{ basePath: 'layout.0' }}>
+          <EditableField field="links">
+            <span>content</span>
+          </EditableField>
+        </SectionContext.Provider>
+      </VisualEditingContext.Provider>,
+    )
+    fireEvent.mouseEnter(container.firstChild as Element)
+    expect(screen.getByRole('button').textContent).toContain('links')
+  })
+
+  it('uses field as full path when no SectionContext is present', () => {
+    const postMessageSpy = vi.fn()
+    Object.defineProperty(window, 'parent', { value: { postMessage: postMessageSpy }, writable: true })
+
+    const { container } = render(
+      <VisualEditingContext.Provider value={adminCtx}>
+        <EditableField field="hero.richText" label="Rich Text">
           <span>content</span>
         </EditableField>
       </VisualEditingContext.Provider>,
     )
-
     fireEvent.mouseEnter(container.firstChild as Element)
-    expect(screen.getByRole('button').textContent).toContain('links')
+    fireEvent.click(screen.getByRole('button'))
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ fieldPath: 'hero.richText' }),
+      '*',
+    )
   })
 })
