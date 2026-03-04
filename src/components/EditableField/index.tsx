@@ -44,7 +44,7 @@ export const EditableField: React.FC<Props> = ({
     >
       {hovered && (
         <button
-          className="absolute top-1 right-1 z-50 flex items-center gap-1 rounded bg-blue-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-600 cursor-pointer border-0"
+          className="absolute -top-5 right-0 z-50 flex items-center gap-1 rounded bg-blue-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-600 cursor-pointer border-0 whitespace-nowrap"
           onClick={handleClick}
         >
           ✏ {label ?? field}

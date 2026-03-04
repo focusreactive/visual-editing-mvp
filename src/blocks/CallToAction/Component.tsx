@@ -20,11 +20,11 @@ export const CallToActionBlock: React.FC<CTABlockProps & { blockIndex?: number }
           </EditableField>
         </div>
         <div className="flex flex-col gap-8">
-          <EditableField field="links" label="Links" blockIndex={blockIndex}>
-            {(links || []).map(({ link }, i) => {
-              return <CMSLink key={i} size="lg" {...link} />
-            })}
-          </EditableField>
+          {(links || []).map(({ link }, i) => (
+            <EditableField key={i} field={`links.${i}`} label={link.label || `Link ${i + 1}`} blockIndex={blockIndex}>
+              <CMSLink size="lg" {...link} />
+            </EditableField>
+          ))}
         </div>
       </div>
     </div>
