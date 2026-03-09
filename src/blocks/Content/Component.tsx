@@ -1,3 +1,5 @@
+'use client'
+
 import { cn } from '@/utilities/ui'
 import React from 'react'
 import RichText from '@/components/RichText'
@@ -5,9 +7,12 @@ import RichText from '@/components/RichText'
 import type { ContentBlock as ContentBlockProps } from '@/payload-types'
 
 import { CMSLink } from '../../components/Link'
+import { useSectionContext } from '@/providers/SectionContext'
+import { SectionContainer } from '@/components/SectionContainer'
 
 export const ContentBlock: React.FC<ContentBlockProps> = (props) => {
   const { columns } = props
+  const section = useSectionContext()
 
   const colsSpanClasses = {
     full: '12',
@@ -23,6 +28,9 @@ export const ContentBlock: React.FC<ContentBlockProps> = (props) => {
           columns.length > 0 &&
           columns.map((col, index) => {
             const { enableLink, link, richText, size } = col
+            const colBasePath = section?.basePath
+              ? `${section.basePath}.columns.${index}`
+              : undefined
 
             return (
               <div
@@ -31,9 +39,17 @@ export const ContentBlock: React.FC<ContentBlockProps> = (props) => {
                 })}
                 key={index}
               >
-                {richText && <RichText data={richText} enableGutter={false} />}
-
-                {enableLink && <CMSLink {...link} />}
+                {colBasePath ? (
+                  <SectionContainer basePath={colBasePath}>
+                    {richText && <RichText data={richText} enableGutter={false} />}
+                    {enableLink && <CMSLink {...link} />}
+                  </SectionContainer>
+                ) : (
+                  <>
+                    {richText && <RichText data={richText} enableGutter={false} />}
+                    {enableLink && <CMSLink {...link} />}
+                  </>
+                )}
               </div>
             )
           })}
