@@ -2,33 +2,101 @@
 
 import { useEffect } from 'react'
 
-function expandAndScroll(blockRowId: string | null, nestedRowId: string | null, fieldId: string | null) {
-  if (blockRowId) {
-    const blockRow = document.getElementById(blockRowId)
-    const toggle = blockRow?.querySelector<HTMLButtonElement>('.collapsible__toggle')
-    if (toggle?.classList.contains('collapsible__toggle--collapsed')) toggle.click()
+const FOCUS_SELECTOR =
+  '[data-lexical-editor="true"], input:not([type="hidden"]), textarea'
+
+/**
+ * Parse a dot-separated fieldPath into row IDs (for collapsible sections)
+ * and an optional fieldId (for the leaf field element).
+ *
+ * Examples:
+ *   'layout.0'                   → rowIds: ['layout-row-0'],                         fieldId: null
+ *   'layout.0.richText'          → rowIds: ['layout-row-0'],                         fieldId: 'field-layout__0__richText'
+ *   'layout.0.links.1'           → rowIds: ['layout-row-0', 'layout-0-links-row-1'], fieldId: null
+ *   'layout.0.links.1.link.url'  → rowIds: ['layout-row-0', 'layout-0-links-row-1'], fieldId: 'field-layout__0__links__1__link__url'
+ */
+function parseFieldPath(fieldPath: string) {
+  const parts = fieldPath.split('.')
+  const rowIds: string[] = []
+
+  for (let i = 0; i < parts.length; i++) {
+    if (!isNaN(parseInt(parts[i]!, 10))) {
+      const prefix = parts.slice(0, i).join('-')
+      rowIds.push(`${prefix}-row-${parts[i]}`)
+    }
+  }
+
+  const lastPart = parts[parts.length - 1]!
+  const endsWithField = isNaN(parseInt(lastPart, 10)) && rowIds.length > 0
+  const fieldId = endsWithField ? `field-${fieldPath.replace(/\./g, '__')}` : null
+
+  return { rowIds, fieldId }
+}
+
+/**
+ * Focus the first matching input within a container's top-level .field-type children.
+ */
+function focusTopLevelField(container: HTMLElement) {
+  const renderFields = container.querySelector('.render-fields')
+  if (!renderFields) return
+  for (const child of renderFields.children) {
+    if (!child.classList.contains('field-type')) continue
+    const focusable = child.querySelector<HTMLElement>(FOCUS_SELECTOR)
+    if (focusable) {
+      focusable.focus()
+      return
+    }
+  }
+}
+
+/**
+ * Sequentially uncollapse all rows, then scroll to the target and focus.
+ */
+function expandAndFocus(rowIds: string[], fieldId: string | null) {
+  let delay = 0
+  const EXPAND_DELAY = 400 // must exceed Payload's 300ms collapse transition
+
+  for (const rowId of rowIds) {
+    setTimeout(() => {
+      const row = document.getElementById(rowId)
+      const toggle = row?.querySelector<HTMLButtonElement>('.collapsible__toggle')
+      if (toggle?.classList.contains('collapsible__toggle--collapsed')) toggle.click()
+    }, delay)
+    delay += EXPAND_DELAY
   }
 
   setTimeout(() => {
-    if (nestedRowId) {
-      const nestedRow = document.getElementById(nestedRowId)
-      const nestedToggle = nestedRow?.querySelector<HTMLButtonElement>('.collapsible__toggle')
-      if (nestedToggle?.classList.contains('collapsible__toggle--collapsed')) nestedToggle.click()
-    }
+    // Try the specific field element first, fall back to the deepest row
+    const fieldEl = fieldId ? document.getElementById(fieldId) : null
+    const fallbackEl = rowIds.length
+      ? document.getElementById(rowIds[rowIds.length - 1]!)
+      : null
+    const scrollTarget = fieldEl ?? fallbackEl
+    if (!scrollTarget) return
 
-    const targetId = nestedRowId ?? fieldId ?? blockRowId
-    if (!targetId) return
-    const el = document.getElementById(targetId)
-    if (el) {
-      const bounds = el.getBoundingClientRect()
-      window.scrollBy({ behavior: 'smooth', top: bounds.top - 100 })
-    }
-  }, 400)
+    const bounds = scrollTarget.getBoundingClientRect()
+    window.scrollBy({ behavior: 'smooth', top: bounds.top - 200 })
+
+    setTimeout(() => {
+      if (fieldEl) {
+        // Specific field found — focus it directly if it matches, otherwise search within
+        if (fieldEl.matches(FOCUS_SELECTOR)) {
+          fieldEl.focus()
+        } else {
+          const focusable = fieldEl.querySelector<HTMLElement>(FOCUS_SELECTOR)
+          focusable?.focus()
+        }
+      } else if (fallbackEl) {
+        // Field element not found — focus the first top-level field in the row
+        focusTopLevelField(fallbackEl)
+      }
+    }, 300)
+  }, delay + 100)
 }
 
 /**
  * If the target element isn't in the current tab, cycle through inactive tabs
- * until it appears, then call the callback. Works regardless of tab labels or structure.
+ * until it appears, then call the callback.
  */
 function ensureTabAndRun(targetId: string, callback: () => void) {
   if (document.getElementById(targetId)) {
@@ -61,33 +129,12 @@ export default function VisualEditingBridge() {
       if (event.data?.type !== 've:open-field') return
 
       const { fieldPath } = event.data as { fieldPath: string }
-      // fieldPath examples:
-      //   'layout.0.richText'   → block field
-      //   'layout.0.links.0'    → nested array item inside block
-      const parts = fieldPath.split('.')
-      const fieldRoot = parts[0]!
-      const blockIndex = parts.length > 1 ? parseInt(parts[1]!, 10) : null
+      const { rowIds, fieldId } = parseFieldPath(fieldPath)
 
-      const isNestedArrayItem = parts.length === 4 && !isNaN(parseInt(parts[3]!, 10))
-      const nestedArrayField = isNestedArrayItem ? parts[2]! : null
-      const nestedArrayIndex = isNestedArrayItem ? parseInt(parts[3]!, 10) : null
-
-      const blockRowId = blockIndex !== null ? `${fieldRoot}-row-${blockIndex}` : null
-      // Payload array row IDs use dashes: layout-0-links-row-0
-      const nestedRowId =
-        nestedArrayField !== null && blockIndex !== null && nestedArrayIndex !== null
-          ? `${fieldRoot}-${blockIndex}-${nestedArrayField}-row-${nestedArrayIndex}`
-          : null
-      const fieldId =
-        !isNestedArrayItem && parts.length > 2
-          ? `field-${fieldPath.replace(/\./g, '__')}`
-          : null
-
-      // Use blockRowId as the probe — if it's not in the DOM, we're on the wrong tab
-      const probeId = blockRowId ?? fieldId
+      const probeId = rowIds[0] ?? fieldId
       if (!probeId) return
 
-      ensureTabAndRun(probeId, () => expandAndScroll(blockRowId, nestedRowId, fieldId))
+      ensureTabAndRun(probeId, () => expandAndFocus(rowIds, fieldId))
     }
 
     window.addEventListener('message', handle)

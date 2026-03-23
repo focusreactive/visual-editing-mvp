@@ -14,6 +14,7 @@ type CMSLinkType = {
   appearance?: 'inline' | ButtonProps['variant']
   children?: React.ReactNode
   className?: string
+  editField?: string
   label?: string | null
   newTab?: boolean | null
   reference?: {
@@ -31,6 +32,7 @@ export const CMSLink: React.FC<CMSLinkType> = (props) => {
     appearance = 'inline',
     children,
     className,
+    editField,
     label,
     newTab,
     reference,
@@ -71,7 +73,7 @@ export const CMSLink: React.FC<CMSLinkType> = (props) => {
 
   if (ve?.isAdmin && section?.basePath) {
     return (
-      <EditableField field="link">
+      <EditableField field={editField ? `${editField}.label` : 'link.label'}>
         {linkElement}
       </EditableField>
     )
