@@ -46,7 +46,7 @@ Opens edit UI for the exact field
 - Requires a third-party toolbar SDK on the frontend
 - No control over the edit UX — you get the toolbar's UI, not your own
 
-**The Payload blocker:** Payload CMS does not generate content source maps. There is no built-in mechanism to get a mapping from "this string in the API response" → "this field at path `layout.0.links.1.link.label` in document `abc-123`." Without source maps, stega encoding is impossible because you don't know which field produced which string at the data layer. Building this infrastructure would mean intercepting Payload's query engine to track field provenance through every level of population, localization, and access control — a significant undertaking.
+**The Payload blocker:** Payload CMS has zero content source map infrastructure — no `@vercel/stega` dependency, no source map generation, no field provenance tracking. This is not a gap that can be bridged from the outside. Content source maps require the CMS itself to track the origin of every string value through its entire query pipeline — population of relationships, localization resolution, access control filtering, block/array field traversal, and draft/published version selection. Every string in the API response needs a reverse pointer to its exact database path and document ID. Sanity built this into their query engine (GROQ) from the ground up; for Payload, this would mean fundamental changes to how `payload.find()` and the REST/GraphQL APIs resolve and return data. It is not on Payload's public roadmap.
 
 ### Approach 2: React Context + Component Annotation (This MVP)
 
@@ -108,15 +108,15 @@ VisualEditingBridge (admin)
 | **Maintenance** | CMS must maintain source maps | Must track Payload DOM conventions |
 | **Setup per block** | Zero | Smart primitives + editField for arrays |
 
-### Ideal Future State
+### Why This MVP Uses the Context Approach
 
-The best visual editing experience would combine both approaches:
+Stega is not a viable option for Payload today and won't be without core CMS changes:
 
-1. **Stega for plain text fields** — if Payload adds content source map support, string fields (titles, labels, descriptions) could be automatically editable at character-level precision with zero component work.
-2. **Context annotation for complex fields** — rich text, media, links, and custom fields would continue using the component-based approach since stega cannot encode non-string values.
-3. **Unified overlay UX** — both approaches would feed into the same green overlay + sweep animation system for a consistent experience.
+1. **Payload has no content source maps** — the fundamental prerequisite for stega doesn't exist and would require deep changes to Payload's query engine to build.
+2. **Stega only covers strings** — even if source maps existed, rich text (Lexical), media uploads, links, and relationships can't be stega-encoded. These are the majority of editable fields in a typical Payload site.
+3. **The context approach works today** — no CMS changes needed. It covers all field types and provides richer admin interactions (section expansion, field focus, sweep animations) than a stega toolbar could.
 
-Until Payload ships content source maps, the context-based approach is the only viable path. It covers all field types and provides a richer admin interaction than stega alone could offer.
+If Payload ever adds content source map support, stega could complement this system for plain text fields (titles, labels, descriptions) — giving character-level precision with zero component work. But the context-based annotation would still be needed for complex fields. The two approaches are complementary, not competing.
 
 ---
 
