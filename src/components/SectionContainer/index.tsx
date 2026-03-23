@@ -37,19 +37,20 @@ export const SectionContainer: React.FC<Props> = ({ basePath, blockType, childre
         <div
           data-testid="section-wrapper"
           className={cn(
-            'relative rounded transition-all duration-150',
-            hovered && 'ring-2 ring-purple-400 ring-offset-4',
+            'relative transition-all duration-100',
+            hovered && 'outline outline-1 outline-emerald-400',
             className,
           )}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
+          onClick={handleClick}
         >
           {hovered && blockType && (
             <button
-              className="absolute -top-3 left-4 z-50 flex items-center gap-1 rounded bg-purple-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-purple-600 cursor-pointer border-0"
+              className="absolute top-0 right-0 -translate-y-full z-50 flex items-center gap-1 bg-emerald-400 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-950 hover:bg-emerald-300 cursor-pointer border-0"
               onClick={handleClick}
             >
-              ✏ {blockType}
+              {blockType}
             </button>
           )}
           {children}

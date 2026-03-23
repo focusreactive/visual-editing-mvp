@@ -1,303 +1,371 @@
-# Payload Website Template
+# Visual Editing MVP
 
-This is the official [Payload Website Template](https://github.com/payloadcms/payload/blob/main/templates/website). Use it to power websites, blogs, or portfolios from small to enterprise. This repo includes a fully-working backend, enterprise-grade admin panel, and a beautifully designed, production-ready website.
+A visual editing system built on top of the Payload Website Template. Admin users can click directly on frontend content to navigate to the exact field in the Payload admin panel — with automatic section expansion, field focus, and a sweep animation.
 
-This template is right for you if you are working on:
+**Status: MVP / Work in Progress**
 
-- A personal or enterprise-grade website, blog, or portfolio
-- A content publishing platform with a fully featured publication workflow
-- Exploring the capabilities of Payload
+## Architectural Approaches to Visual Editing
 
-Core features:
+There are two fundamentally different ways to connect frontend content to CMS fields. This section documents both, their tradeoffs, and why this MVP uses the approach it does.
 
-- [Pre-configured Payload Config](#how-it-works)
-- [Authentication](#users-authentication)
-- [Access Control](#access-control)
-- [Layout Builder](#layout-builder)
-- [Draft Preview](#draft-preview)
-- [Live Preview](#live-preview)
-- [On-demand Revalidation](#on-demand-revalidation)
-- [SEO](#seo)
-- [Search](#search)
-- [Redirects](#redirects)
-- [Jobs and Scheduled Publishing](#jobs-and-scheduled-publish)
-- [Website](#website)
+### Approach 1: Steganography (Stega) + Content Source Maps
 
-## Quick Start
+This is the approach pioneered by Sanity and adopted by Vercel's `@vercel/stega`. It works at the **data layer**.
 
-To spin up this example locally, follow these steps:
+**How it works:**
 
-### Clone
+1. The CMS generates **content source maps** — a JSON mapping from every string value in the API response to its origin field path and document ID.
+2. At data fetch time, a library like `@vercel/stega` encodes this metadata into string values using invisible zero-width Unicode characters.
+3. On the frontend, a toolbar SDK (like `@vercel/visual-editing`) detects hover/click on any text, reads the hidden characters, and knows exactly which CMS field produced that text.
+4. The toolbar then opens an edit intent URL or sends a message to the CMS admin.
 
-If you have not done so already, you need to have standalone copy of this repo on your machine. If you've already cloned this repo, skip to [Development](#development).
+```
+CMS Database
+  ↓
+API Response + Content Source Map
+  ↓
+Stega encoding (invisible chars injected into strings)
+  ↓
+Frontend renders strings (with hidden metadata)
+  ↓
+Toolbar SDK reads metadata on hover/click
+  ↓
+Opens edit UI for the exact field
+```
 
-Use the `create-payload-app` CLI to clone this template directly to your machine:
+**Advantages:**
+- Zero per-component work — every string field is automatically editable
+- Character-level precision — can highlight the exact text that maps to a field
+- Works with server components — encoding happens at data fetch, not render
+- Framework-agnostic — works with any frontend (React, Vue, vanilla HTML)
+
+**Disadvantages:**
+- **Requires content source maps from the CMS** — this is the fundamental blocker
+- Only works for string fields — rich text (Lexical), media, relationships, and other complex fields cannot be stega-encoded
+- Invisible characters can break `textContent` comparisons, copy-paste, and some SEO tools
+- Requires a third-party toolbar SDK on the frontend
+- No control over the edit UX — you get the toolbar's UI, not your own
+
+**The Payload blocker:** Payload CMS does not generate content source maps. There is no built-in mechanism to get a mapping from "this string in the API response" → "this field at path `layout.0.links.1.link.label` in document `abc-123`." Without source maps, stega encoding is impossible because you don't know which field produced which string at the data layer. Building this infrastructure would mean intercepting Payload's query engine to track field provenance through every level of population, localization, and access control — a significant undertaking.
+
+### Approach 2: React Context + Component Annotation (This MVP)
+
+This is the approach used here. It works at the **component layer**.
+
+**How it works:**
+
+1. A `VisualEditingProvider` at the page root checks if the user is a Payload admin.
+2. `SectionContainer` wraps each block/section and publishes a `basePath` via React context.
+3. "Smart primitives" (`RichText`, `CMSLink`, `Media`) read the context and wrap themselves in `EditableField` overlays that know their full field path.
+4. Clicking an overlay sends a `postMessage` to the admin panel with the field path.
+5. The `VisualEditingBridge` in the admin parses the path, expands sections, and focuses the field.
+
+```
+Page Component
+  ↓
+VisualEditingProvider (isAdmin? docId? collectionSlug?)
+  ↓
+SectionContainer (basePath="layout.0")
+  ↓ publishes SectionContext
+  ↓
+RichText / CMSLink / EditableField
+  ↓ reads basePath, appends field name
+  ↓ renders green overlay on hover
+  ↓
+Click → postMessage({ fieldPath: "layout.0.richText" })
+  ↓
+VisualEditingBridge (admin)
+  ↓ expands sections → scrolls → focuses → sweep animation
+```
+
+**Advantages:**
+- Works with ALL field types — rich text (Lexical), media, links, relationships, custom fields
+- Full control over the overlay UX — custom colors, animations, sweep effects
+- No invisible characters polluting content
+- No external dependencies — pure React context
+- Works with Payload out of the box — no source map infrastructure needed
+- Can trigger complex admin interactions (expand collapsibles, switch tabs, focus specific inputs)
+
+**Disadvantages:**
+- Requires per-component work — each field type needs to be wrapped or made "smart"
+- Field-level precision only — can't highlight individual characters within a string
+- Requires `'use client'` — overlays need React state for hover/click
+- Path construction is manual — wrong paths silently fail (field not found, wrong section expanded)
+- Tightly coupled to Payload's admin DOM — relies on CSS class names and ID conventions that may change between versions
+
+### Comparison
+
+| | Stega + Source Maps | Context + Annotation (this MVP) |
+|---|---|---|
+| **CMS requirement** | Content source maps (Payload: not available) | Admin user check via API (works today) |
+| **String fields** | Automatic | Need EditableField wrapper |
+| **Rich text** | Not supported | Supported (Lexical focus) |
+| **Media / uploads** | Not supported | Supported |
+| **Links / relationships** | Not supported | Supported |
+| **Precision** | Character-level | Field-level |
+| **Server components** | Compatible | Requires `'use client'` |
+| **Admin interaction** | Opens edit URL | Expands sections, focuses input, sweep animation |
+| **Maintenance** | CMS must maintain source maps | Must track Payload DOM conventions |
+| **Setup per block** | Zero | Smart primitives + editField for arrays |
+
+### Ideal Future State
+
+The best visual editing experience would combine both approaches:
+
+1. **Stega for plain text fields** — if Payload adds content source map support, string fields (titles, labels, descriptions) could be automatically editable at character-level precision with zero component work.
+2. **Context annotation for complex fields** — rich text, media, links, and custom fields would continue using the component-based approach since stega cannot encode non-string values.
+3. **Unified overlay UX** — both approaches would feed into the same green overlay + sweep animation system for a consistent experience.
+
+Until Payload ships content source maps, the context-based approach is the only viable path. It covers all field types and provides a richer admin interaction than stega alone could offer.
+
+---
+
+## How It Works
+
+The system has three layers:
+
+```
+Frontend (preview)                         Admin Panel
+┌──────────────────────────┐        ┌──────────────────────────┐
+│ VisualEditingProvider    │        │ VisualEditingBridge      │
+│   ├─ SectionContainer    │──msg──▶│   ├─ parse fieldPath     │
+│   │    ├─ RichText       │        │   ├─ switch tab          │
+│   │    ├─ CMSLink        │        │   ├─ expand rows         │
+│   │    └─ EditableField  │        │   ├─ scroll & focus      │
+│   └─ ...                 │        │   └─ sweep animation     │
+└──────────────────────────┘        └──────────────────────────┘
+```
+
+1. **VisualEditingProvider** — page-level context that checks if the current user is a Payload admin. Provides `isAdmin`, `docId`, `collectionSlug`, `adminBaseUrl` to all descendants.
+
+2. **SectionContainer + EditableField** — overlay components that render green outlines and edit badges on hover. Clicking sends a `ve:open-field` postMessage to the admin panel with the dot-separated field path.
+
+3. **VisualEditingBridge** — admin-side component that receives messages, expands collapsed sections, switches tabs, scrolls to the target field, focuses the input, and plays a sweep animation.
+
+## Architecture
+
+### Field Path Convention
+
+Every editable element builds a dot-separated path matching Payload's internal field structure:
+
+```
+layout.0.richText              → block 0, richText field
+layout.0.links.1.link.label    → block 0, links array index 1, link group, label
+hero.richText                  → hero section rich text
+layout.3.cards.0.link.label    → block 3, cards array index 0, link label
+```
+
+Paths are composed by combining `SectionContext.basePath` + the field name passed to `EditableField`.
+
+### Payload Admin DOM ID Conventions
+
+The bridge maps field paths to Payload's DOM elements:
+
+| Path segment | DOM ID pattern | Example |
+|---|---|---|
+| Array index | `{prefix}-row-{index}` | `layout.0` → `layout-row-0` |
+| Nested array | `{parent-dashed}-row-{index}` | `layout.0.links.1` → `layout-0-links-row-1` |
+| Field | `field-{path-with-__}` | `layout.0.links.1.link.label` → `field-layout__0__links__1__link__label` |
+
+**Known exception:** Lexical rich text fields do NOT get a `field-` id on their wrapper. The bridge falls back to the row element and focuses the first top-level field.
+
+### Message Protocol
+
+```js
+// Frontend → Admin
+{
+  type: "ve:open-field",
+  fieldPath: "layout.2.links.0.link.label",
+  docId: "abc-123",
+  collectionSlug: "pages"
+}
+```
+
+### Core Files
+
+| File | Purpose |
+|---|---|
+| `src/providers/VisualEditing/index.tsx` | Page-level context, admin detection via `/api/users/me` |
+| `src/providers/SectionContext/index.tsx` | Provides `basePath` to descendant fields |
+| `src/components/SectionContainer/index.tsx` | Block-level overlay (green outline + badge), provides SectionContext |
+| `src/components/EditableField/index.tsx` | Field-level overlay (green outline + badge) |
+| `src/components/VisualEditingBridge/index.tsx` | Admin-side: parses paths, expands rows, focuses fields, sweep animation |
+| `src/components/RichText/index.tsx` | Auto-wraps in EditableField when in admin SectionContext |
+| `src/components/Link/index.tsx` | Auto-wraps in EditableField, supports `editField` prop for array paths |
+| `src/blocks/RenderBlocks.tsx` | Wraps each layout block in SectionContainer |
+| `src/heros/RenderHero.tsx` | Wraps hero in SectionContainer |
+
+## Adding Visual Editing to a New Block
+
+### Step 1: Register the block
+
+Add the config to `src/collections/Pages/index.ts` in the `blocks` array and register its component in `src/blocks/RenderBlocks.tsx`:
+
+```tsx
+// RenderBlocks.tsx
+import { MyNewBlock } from '@/blocks/MyNewBlock/Component'
+
+const blockComponents = {
+  // ...existing blocks
+  myNewBlock: MyNewBlock,
+}
+```
+
+`RenderBlocks` automatically wraps every block in a `SectionContainer` with `basePath={layout.${index}}`.
+
+### Step 2: Use smart primitives
+
+Three components auto-annotate themselves when inside a `SectionContext`:
+
+- **`RichText`** — `field="richText"`
+- **`CMSLink`** — `field="link.label"` (targets the label input in admin)
+- **`Media`** — `field="media"`
+
+Just render them in your block component. Overlays are automatic.
+
+### Step 3: Handle array fields
+
+When a primitive is inside a `.map()`, pass the correct path with the array index:
+
+```tsx
+// WRONG — sends "link.label", admin can't find the array row
+{links.map(({ link }, i) => (
+  <CMSLink {...link} />
+))}
+
+// CORRECT — sends "links.0.link.label", admin expands the right row
+{links.map(({ link }, i) => (
+  <CMSLink {...link} editField={`links.${i}.link`} />
+))}
+```
+
+### Step 4: Nested sub-items
+
+For blocks with independently editable sub-items (like cards or columns), wrap each item in its own `SectionContainer`:
+
+```tsx
+{cards.map((card, index) => {
+  const cardBasePath = section?.basePath
+    ? `${section.basePath}.cards.${index}`
+    : undefined
+
+  return cardBasePath ? (
+    <SectionContainer key={index} basePath={cardBasePath}>
+      {/* primitives here use the card's basePath */}
+    </SectionContainer>
+  ) : (
+    <div key={index}>{/* non-admin render */}</div>
+  )
+})}
+```
+
+### Step 5: Custom fields
+
+For fields that aren't RichText/CMSLink/Media, wrap manually with `EditableField`:
+
+```tsx
+import { EditableField } from '@/components/EditableField'
+
+<EditableField field="title" label="Title">
+  <h1>{title}</h1>
+</EditableField>
+```
+
+The `field` value must match the Payload field slug.
+
+### Checklist
+
+- [ ] Block config added to Pages collection
+- [ ] Block component registered in RenderBlocks
+- [ ] Smart primitives (RichText, CMSLink, Media) used where applicable
+- [ ] Array-rendered CMSLinks pass `editField={`arrayName.${i}.link`}`
+- [ ] Nested sub-items wrapped in SectionContainer with correct basePath
+- [ ] Custom fields wrapped in EditableField with matching Payload field slug
+- [ ] Clicking overlay in preview expands the correct section in admin
+- [ ] Correct field receives focus after expansion
+- [ ] Sweep animation plays on the focused field
+
+## Available Block Types
+
+| Block | Smart primitives used | Notes |
+|---|---|---|
+| CallToAction | RichText, CMSLink (array) | Links use `editField={links.${i}.link}` |
+| Content | RichText, CMSLink | Columns wrapped in SectionContainer |
+| Archive | RichText | Select/relationship fields not yet editable |
+| MediaBlock | Media | |
+| Banner | RichText | |
+| ImageText | RichText, CMSLink, Media | Single link (no array) |
+| CardGrid | CMSLink | Cards wrapped in SectionContainer |
+| Code | — | No editable primitives |
+| Form | — | Form fields not applicable |
+
+## Known Issues and Future Improvements
+
+### 1. No sweep animation on preview side
+
+When clicking a section or field overlay, the green sweep animation only plays in the admin panel (left side). The preview iframe (right side) does not show any visual feedback confirming what was clicked. Adding a sweep or flash on the preview element that was clicked would improve the feedback loop.
+
+### 2. Expansion timing lag
+
+When clicking a deeply nested field, the bridge sequentially expands collapsible rows with 500ms delays. During this expansion, Payload's height transition animation can cause a brief moment of broken/shifting UI before the content settles. The current delays (500ms between expansions, 400ms before focus) are conservative but still occasionally show this artifact. A more robust approach would be to observe DOM mutations or listen for `transitionend` events instead of using fixed timeouts.
+
+### 3. Standalone draft mode overlay
+
+The visual editing overlays currently work in two contexts:
+- **Inside Payload's live preview iframe** — clicks send postMessage to the admin parent
+- **Standalone page visits** — clicking "Edit in CMS" opens the admin in a new tab
+
+In standalone mode, we open the correct admin page but do NOT focus on the specific field. A future improvement would be to pass the `fieldPath` as a URL parameter (e.g., `?ve-focus=layout.0.richText`) and have the VisualEditingBridge read it on page load to auto-expand and focus. This would give the same precise field navigation experience outside of the iframe context.
+
+### 4. Lexical rich text fields lack DOM IDs
+
+Payload's Lexical rich text fields do not render a `field-{path}` id on their wrapper element, unlike text inputs and other field types. The bridge works around this by falling back to the parent row element and focusing the first top-level field. This means if a rich text field is not the first field in a block, the wrong field may receive focus. A more precise solution would be to search for the field by its `name` attribute or label text.
+
+### 5. Select/relationship fields not focusable
+
+The current focus selector targets `[data-lexical-editor], input:not([type="hidden"]), textarea`. React-select based fields (dropdowns, relationship pickers) use a hidden input that doesn't respond to `.focus()` in a useful way. These field types are not yet supported for auto-focus.
+
+---
+
+## Original Template Documentation
+
+This project is built on the official [Payload Website Template](https://github.com/payloadcms/payload/blob/main/templates/website).
+
+### Quick Start
 
 ```bash
 pnpx create-payload-app my-project -t website
+cd my-project && cp .env.example .env
+pnpm install && pnpm dev
 ```
 
-### Development
-
-1. First [clone the repo](#clone) if you have not done so already
-1. `cd my-project && cp .env.example .env` to copy the example environment variables
-1. `pnpm install && pnpm dev` to install dependencies and start the dev server
-1. open `http://localhost:3000` to open the app in your browser
-
-That's it! Changes made in `./src` will be reflected in your app. Follow the on-screen instructions to login and create your first admin user. Then check out [Production](#production) once you're ready to build and serve your app, and [Deployment](#deployment) when you're ready to go live.
-
-## How it works
-
-The Payload config is tailored specifically to the needs of most websites. It is pre-configured in the following ways:
+Open `http://localhost:3000`.
 
 ### Collections
 
-See the [Collections](https://payloadcms.com/docs/configuration/collections) docs for details on how to extend this functionality.
+- **Users** — auth-enabled, access to admin panel
+- **Pages** — layout builder enabled, draft preview
+- **Posts** — blog/news content, layout builder enabled
+- **Media** — uploads with pre-configured sizes and focal point
+- **Categories** — taxonomy for grouping posts
 
-- #### Users (Authentication)
+### Layout Builder
 
-  Users are auth-enabled collections that have access to the admin panel and unpublished content. See [Access Control](#access-control) for more details.
+Create unique page layouts using blocks: Hero, Content, Media, Call To Action, Archive, ImageText, CardGrid.
 
-  For additional help, see the official [Auth Example](https://github.com/payloadcms/payload/tree/main/examples/auth) or the [Authentication](https://payloadcms.com/docs/authentication/overview#authentication-overview) docs.
+### Draft Preview & Live Preview
 
-- #### Posts
+All posts and pages are draft-enabled. The template supports both draft preview (via custom URL redirect) and live preview (SSR rendering while editing).
 
-  Posts are used to generate blog posts, news articles, or any other type of content that is published over time. All posts are layout builder enabled so you can generate unique layouts for each post using layout-building blocks, see [Layout Builder](#layout-builder) for more details. Posts are also draft-enabled so you can preview them before publishing them to your website, see [Draft Preview](#draft-preview) for more details.
+### SEO, Search, Redirects
 
-- #### Pages
+Pre-configured with official Payload plugins for SEO, search, and redirects.
 
-  All pages are layout builder enabled so you can generate unique layouts for each page using layout-building blocks, see [Layout Builder](#layout-builder) for more details. Pages are also draft-enabled so you can preview them before publishing them to your website, see [Draft Preview](#draft-preview) for more details.
-
-- #### Media
-
-  This is the uploads enabled collection used by pages, posts, and projects to contain media like images, videos, downloads, and other assets. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
-
-- #### Categories
-
-  A taxonomy used to group posts together. Categories can be nested inside of one another, for example "News > Technology". See the official [Payload Nested Docs Plugin](https://payloadcms.com/docs/plugins/nested-docs) for more details.
-
-### Globals
-
-See the [Globals](https://payloadcms.com/docs/configuration/globals) docs for details on how to extend this functionality.
-
-- `Header`
-
-  The data required by the header on your front-end like nav links.
-
-- `Footer`
-
-  Same as above but for the footer of your site.
-
-## Access control
-
-Basic access control is setup to limit access to various content based based on publishing status.
-
-- `users`: Users can access the admin panel and create or edit content.
-- `posts`: Everyone can access published posts, but only users can create, update, or delete them.
-- `pages`: Everyone can access published pages, but only users can create, update, or delete them.
-
-For more details on how to extend this functionality, see the [Payload Access Control](https://payloadcms.com/docs/access-control/overview#access-control) docs.
-
-## Layout Builder
-
-Create unique page layouts for any type of content using a powerful layout builder. This template comes pre-configured with the following layout building blocks:
-
-- Hero
-- Content
-- Media
-- Call To Action
-- Archive
-
-Each block is fully designed and built into the front-end website that comes with this template. See [Website](#website) for more details.
-
-## Lexical editor
-
-A deep editorial experience that allows complete freedom to focus just on writing content without breaking out of the flow with support for Payload blocks, media, links and other features provided out of the box. See [Lexical](https://payloadcms.com/docs/rich-text/overview) docs.
-
-## Draft Preview
-
-All posts and pages are draft-enabled so you can preview them before publishing them to your website. To do this, these collections use [Versions](https://payloadcms.com/docs/configuration/collections#versions) with `drafts` set to `true`. This means that when you create a new post, project, or page, it will be saved as a draft and will not be visible on your website until you publish it. This also means that you can preview your draft before publishing it to your website. To do this, we automatically format a custom URL which redirects to your front-end to securely fetch the draft version of your content.
-
-Since the front-end of this template is statically generated, this also means that pages, posts, and projects will need to be regenerated as changes are made to published documents. To do this, we use an `afterChange` hook to regenerate the front-end when a document has changed and its `_status` is `published`.
-
-For more details on how to extend this functionality, see the official [Draft Preview Example](https://github.com/payloadcms/payload/tree/examples/draft-preview).
-
-## Live preview
-
-In addition to draft previews you can also enable live preview to view your end resulting page as you're editing content with full support for SSR rendering. See [Live preview docs](https://payloadcms.com/docs/live-preview/overview) for more details.
-
-## On-demand Revalidation
-
-We've added hooks to collections and globals so that all of your pages, posts, footer, or header changes will automatically be updated in the frontend via on-demand revalidation supported by Nextjs.
-
-> Note: if an image has been changed, for example it's been cropped, you will need to republish the page it's used on in order to be able to revalidate the Nextjs image cache.
-
-## SEO
-
-This template comes pre-configured with the official [Payload SEO Plugin](https://payloadcms.com/docs/plugins/seo) for complete SEO control from the admin panel. All SEO data is fully integrated into the front-end website that comes with this template. See [Website](#website) for more details.
-
-## Search
-
-This template also pre-configured with the official [Payload Search Plugin](https://payloadcms.com/docs/plugins/search) to showcase how SSR search features can easily be implemented into Next.js with Payload. See [Website](#website) for more details.
-
-## Redirects
-
-If you are migrating an existing site or moving content to a new URL, you can use the `redirects` collection to create a proper redirect from old URLs to new ones. This will ensure that proper request status codes are returned to search engines and that your users are not left with a broken link. This template comes pre-configured with the official [Payload Redirects Plugin](https://payloadcms.com/docs/plugins/redirects) for complete redirect control from the admin panel. All redirects are fully integrated into the front-end website that comes with this template. See [Website](#website) for more details.
-
-## Jobs and Scheduled Publish
-
-We have configured [Scheduled Publish](https://payloadcms.com/docs/versions/drafts#scheduled-publish) which uses the [jobs queue](https://payloadcms.com/docs/jobs-queue/jobs) in order to publish or unpublish your content on a scheduled time. The tasks are run on a cron schedule and can also be run as a separate instance if needed.
-
-> Note: When deployed on Vercel, depending on the plan tier, you may be limited to daily cron only.
-
-## Website
-
-This template includes a beautifully designed, production-ready front-end built with the [Next.js App Router](https://nextjs.org), served right alongside your Payload app in a instance. This makes it so that you can deploy both your backend and website where you need it.
-
-Core features:
-
-- [Next.js App Router](https://nextjs.org)
-- [TypeScript](https://www.typescriptlang.org)
-- [React Hook Form](https://react-hook-form.com)
-- [Payload Admin Bar](https://github.com/payloadcms/payload/tree/main/packages/admin-bar)
-- [TailwindCSS styling](https://tailwindcss.com/)
-- [shadcn/ui components](https://ui.shadcn.com/)
-- User Accounts and Authentication
-- Fully featured blog
-- Publication workflow
-- Dark mode
-- Pre-made layout building blocks
-- SEO
-- Search
-- Redirects
-- Live preview
-
-### Cache
-
-Although Next.js includes a robust set of caching strategies out of the box, Payload Cloud proxies and caches all files through Cloudflare using the [Official Cloud Plugin](https://www.npmjs.com/package/@payloadcms/payload-cloud). This means that Next.js caching is not needed and is disabled by default. If you are hosting your app outside of Payload Cloud, you can easily reenable the Next.js caching mechanisms by removing the `no-store` directive from all fetch requests in `./src/app/_api` and then removing all instances of `export const dynamic = 'force-dynamic'` from pages files, such as `./src/app/(pages)/[slug]/page.tsx`. For more details, see the official [Next.js Caching Docs](https://nextjs.org/docs/app/building-your-application/caching).
-
-## Development
-
-To spin up this example locally, follow the [Quick Start](#quick-start). Then [Seed](#seed) the database with a few pages, posts, and projects.
-
-### Working with Postgres
-
-Postgres and other SQL-based databases follow a strict schema for managing your data. In comparison to our MongoDB adapter, this means that there's a few extra steps to working with Postgres.
-
-Note that often times when making big schema changes you can run the risk of losing data if you're not manually migrating it.
-
-#### Local development
-
-Ideally we recommend running a local copy of your database so that schema updates are as fast as possible. By default the Postgres adapter has `push: true` for development environments. This will let you add, modify and remove fields and collections without needing to run any data migrations.
-
-If your database is pointed to production you will want to set `push: false` otherwise you will risk losing data or having your migrations out of sync.
-
-#### Migrations
-
-[Migrations](https://payloadcms.com/docs/database/migrations) are essentially SQL code versions that keeps track of your schema. When deploy with Postgres you will need to make sure you create and then run your migrations.
-
-Locally create a migration
+### Production
 
 ```bash
-pnpm payload migrate:create
+pnpm build
+pnpm start
 ```
 
-This creates the migration files you will need to push alongside with your new configuration.
-
-On the server after building and before running `pnpm start` you will want to run your migrations
-
-```bash
-pnpm payload migrate
-```
-
-This command will check for any migrations that have not yet been run and try to run them and it will keep a record of migrations that have been run in the database.
-
-### Docker
-
-Alternatively, you can use [Docker](https://www.docker.com) to spin up this template locally. To do so, follow these steps:
-
-1. Follow [steps 1 and 2 from above](#development), the docker-compose file will automatically use the `.env` file in your project root
-1. Next run `docker-compose up`
-1. Follow [steps 4 and 5 from above](#development) to login and create your first admin user
-
-That's it! The Docker instance will help you get up and running quickly while also standardizing the development environment across your teams.
-
-### Seed
-
-To seed the database with a few pages, posts, and projects you can click the 'seed database' link from the admin panel.
-
-The seed script will also create a demo user for demonstration purposes only:
-
-- Demo Author
-  - Email: `demo-author@payloadcms.com`
-  - Password: `password`
-
-> NOTICE: seeding the database is destructive because it drops your current database to populate a fresh one from the seed template. Only run this command if you are starting a new project or can afford to lose your current data.
-
-## Production
-
-To run Payload in production, you need to build and start the Admin panel. To do so, follow these steps:
-
-1. Invoke the `next build` script by running `pnpm build` or `npm run build` in your project root. This creates a `.next` directory with a production-ready admin bundle.
-1. Finally run `pnpm start` or `npm run start` to run Node in production and serve Payload from the `.build` directory.
-1. When you're ready to go live, see Deployment below for more details.
-
-### Deploying to Vercel
-
-This template can also be deployed to Vercel for free. You can get started by choosing the Vercel DB adapter during the setup of the template or by manually installing and configuring it:
-
-```bash
-pnpm add @payloadcms/db-vercel-postgres
-```
-
-```ts
-// payload.config.ts
-import { vercelPostgresAdapter } from '@payloadcms/db-vercel-postgres'
-
-export default buildConfig({
-  // ...
-  db: vercelPostgresAdapter({
-    pool: {
-      connectionString: process.env.POSTGRES_URL || '',
-    },
-  }),
-  // ...
-```
-
-We also support Vercel's blob storage:
-
-```bash
-pnpm add @payloadcms/storage-vercel-blob
-```
-
-```ts
-// payload.config.ts
-import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
-
-export default buildConfig({
-  // ...
-  plugins: [
-    vercelBlobStorage({
-      collections: {
-        [Media.slug]: true,
-      },
-      token: process.env.BLOB_READ_WRITE_TOKEN || '',
-    }),
-  ],
-  // ...
-```
-
-There is also a simplified [one click deploy](https://github.com/payloadcms/payload/tree/templates/with-vercel-postgres) to Vercel should you need it.
-
-### Self-hosting
-
-Before deploying your app, you need to:
-
-1. Ensure your app builds and serves in production. See [Production](#production) for more details.
-2. You can then deploy Payload as you would any other Node.js or Next.js application either directly on a VPS, DigitalOcean's Apps Platform, via Coolify or more. More guides coming soon.
-
-You can also deploy your app manually, check out the [deployment documentation](https://payloadcms.com/docs/production/deployment) for full details.
-
-## Questions
-
-If you have any issues or questions, reach out to us on [Discord](https://discord.com/invite/payload) or start a [GitHub discussion](https://github.com/payloadcms/payload/discussions).
+See the [Payload deployment docs](https://payloadcms.com/docs/production/deployment) for hosting options.

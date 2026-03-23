@@ -7,6 +7,8 @@ import { CallToActionBlock } from '@/blocks/CallToAction/Component'
 import { ContentBlock } from '@/blocks/Content/Component'
 import { FormBlock } from '@/blocks/Form/Component'
 import { MediaBlock } from '@/blocks/MediaBlock/Component'
+import { ImageTextBlock } from '@/blocks/ImageText/Component'
+import { CardGridBlock } from '@/blocks/CardGrid/Component'
 import { SectionContainer } from '@/components/SectionContainer'
 
 const blockComponents = {
@@ -14,6 +16,8 @@ const blockComponents = {
   content: ContentBlock,
   cta: CallToActionBlock,
   formBlock: FormBlock,
+  imageText: ImageTextBlock,
+  cardGrid: CardGridBlock,
   mediaBlock: MediaBlock,
 }
 

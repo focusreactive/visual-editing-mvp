@@ -5,6 +5,55 @@ import { useEffect } from 'react'
 const FOCUS_SELECTOR =
   '[data-lexical-editor="true"], input:not([type="hidden"]), textarea'
 
+const SWEEP_STYLE_ID = 've-sweep-styles'
+
+function ensureSweepStyles() {
+  if (document.getElementById(SWEEP_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = SWEEP_STYLE_ID
+  style.textContent = `
+    @keyframes ve-sweep {
+      0%   { transform: translateY(-100%); opacity: 1; }
+      60%  { opacity: 1; }
+      100% { transform: translateY(100%); opacity: 0; }
+    }
+    .ve-sweep-container {
+      position: relative;
+      overflow: hidden;
+    }
+    .ve-sweep-overlay {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(52, 211, 153, 0.08) 30%,
+        rgba(52, 211, 153, 0.15) 50%,
+        rgba(52, 211, 153, 0.08) 70%,
+        transparent 100%
+      );
+      animation: ve-sweep 0.6s ease-out forwards;
+    }
+  `
+  document.head.appendChild(style)
+}
+
+function playSweep(el: HTMLElement) {
+  ensureSweepStyles()
+  el.classList.add('ve-sweep-container')
+
+  const overlay = document.createElement('div')
+  overlay.className = 've-sweep-overlay'
+  el.appendChild(overlay)
+
+  overlay.addEventListener('animationend', () => {
+    overlay.remove()
+    el.classList.remove('ve-sweep-container')
+  })
+}
+
 /**
  * Parse a dot-separated fieldPath into row IDs (for collapsible sections)
  * and an optional fieldId (for the leaf field element).
@@ -35,18 +84,20 @@ function parseFieldPath(fieldPath: string) {
 
 /**
  * Focus the first matching input within a container's top-level .field-type children.
+ * Returns the focused field-type element (for sweep), or null.
  */
-function focusTopLevelField(container: HTMLElement) {
+function focusTopLevelField(container: HTMLElement): HTMLElement | null {
   const renderFields = container.querySelector('.render-fields')
-  if (!renderFields) return
+  if (!renderFields) return null
   for (const child of renderFields.children) {
     if (!child.classList.contains('field-type')) continue
     const focusable = child.querySelector<HTMLElement>(FOCUS_SELECTOR)
     if (focusable) {
       focusable.focus()
-      return
+      return child as HTMLElement
     }
   }
+  return null
 }
 
 /**
@@ -54,7 +105,7 @@ function focusTopLevelField(container: HTMLElement) {
  */
 function expandAndFocus(rowIds: string[], fieldId: string | null) {
   let delay = 0
-  const EXPAND_DELAY = 400 // must exceed Payload's 300ms collapse transition
+  const EXPAND_DELAY = 500 // must comfortably exceed Payload's 300ms collapse transition
 
   for (const rowId of rowIds) {
     setTimeout(() => {
@@ -65,8 +116,8 @@ function expandAndFocus(rowIds: string[], fieldId: string | null) {
     delay += EXPAND_DELAY
   }
 
+  // Wait for all expansions to settle, then scroll and focus
   setTimeout(() => {
-    // Try the specific field element first, fall back to the deepest row
     const fieldEl = fieldId ? document.getElementById(fieldId) : null
     const fallbackEl = rowIds.length
       ? document.getElementById(rowIds[rowIds.length - 1]!)
@@ -77,21 +128,26 @@ function expandAndFocus(rowIds: string[], fieldId: string | null) {
     const bounds = scrollTarget.getBoundingClientRect()
     window.scrollBy({ behavior: 'smooth', top: bounds.top - 200 })
 
+    // Focus and sweep only the final target field
     setTimeout(() => {
+      let sweepTarget: HTMLElement | null = null
+
       if (fieldEl) {
-        // Specific field found — focus it directly if it matches, otherwise search within
         if (fieldEl.matches(FOCUS_SELECTOR)) {
           fieldEl.focus()
+          sweepTarget = fieldEl.closest<HTMLElement>('.field-type')
         } else {
           const focusable = fieldEl.querySelector<HTMLElement>(FOCUS_SELECTOR)
           focusable?.focus()
+          sweepTarget = fieldEl
         }
       } else if (fallbackEl) {
-        // Field element not found — focus the first top-level field in the row
-        focusTopLevelField(fallbackEl)
+        sweepTarget = focusTopLevelField(fallbackEl)
       }
-    }, 300)
-  }, delay + 100)
+
+      if (sweepTarget) playSweep(sweepTarget)
+    }, 400)
+  }, delay + 200)
 }
 
 /**

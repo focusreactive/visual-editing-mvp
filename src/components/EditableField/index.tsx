@@ -34,26 +34,27 @@ export const EditableField: React.FC<Props> = ({ field, label, children, classNa
 
   return (
     <div
-      className={cn('relative', className)}
+      className={cn('relative cursor-pointer', className)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={handleClick}
     >
-      {hovered && (
-        <button
-          className="absolute -top-5 right-0 z-50 flex items-center gap-1 rounded bg-blue-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-600 cursor-pointer border-0 whitespace-nowrap"
-          onClick={handleClick}
-        >
-          ✏ {label ?? field}
-        </button>
-      )}
       <div
         className={cn(
-          'rounded transition-all duration-150',
-          hovered && 'ring-2 ring-blue-500 ring-offset-2',
+          'transition-all duration-100',
+          hovered && 'outline outline-1 outline-emerald-400',
         )}
       >
         {children}
       </div>
+      {hovered && (
+        <button
+          className="absolute top-0 right-0 -translate-y-full z-50 flex items-center gap-1 bg-emerald-400 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-950 hover:bg-emerald-300 cursor-pointer border-0 whitespace-nowrap"
+          onClick={handleClick}
+        >
+          {label ?? field}
+        </button>
+      )}
     </div>
   )
 }
