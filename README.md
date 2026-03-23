@@ -1,3 +1,9 @@
+# credentials
+https://visual-editing-mvp.vercel.app/admin
+log: admin@focusreactive.com
+pas: 12345
+
+
 # Visual Editing MVP
 
 A visual editing system built on top of the Payload Website Template. Admin users can click directly on frontend content to navigate to the exact field in the Payload admin panel — with automatic section expansion, field focus, and a sweep animation.
